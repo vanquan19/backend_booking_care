@@ -48,9 +48,12 @@ export default class AuthController {
             console.log("verifyToken decoding");
 
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
             req.user = decoded;
             next();
         } catch (error) {
+            console.log("verifyToken error", error);
+
             res.status(401).json({
                 isSuccess: false,
                 message: "Token không hợp lệ!",
@@ -101,11 +104,11 @@ export default class AuthController {
                 [user.id]
             );
         } else if (role == "doctor") {
+            console.log("doctor");
             [[dataUser]] = await connection.query(
-                "SELECT users.id, doctor.firstname, doctor.lastname, users.email, users.phone, users.image FROM users INNER JOIN doctor ON users.id = doctor.userID  WHERE users.id = ?",
+                "SELECT users.id, doctor.firstname, doctor.lastname, users.email, users.phone, users.image, clinics.name as clinicName, doctor.clinicId, doctor.position FROM users INNER JOIN doctor ON users.id = doctor.userID INNER JOIN clinics ON clinics.id = doctor.clinicId WHERE users.id = ?",
                 [user.id]
             );
-            dataUser = rows;
         } else if (role == "patient") {
             [[dataUser]] = await connection.query(
                 "SELECT users.id, patient.firstname, patient.lastname, users.email, users.phone, users.image FROM users INNER JOIN patient ON users.id = patient.userID  WHERE users.id = ?",
