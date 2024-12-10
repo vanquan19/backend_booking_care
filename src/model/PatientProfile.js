@@ -70,6 +70,72 @@ export class PatientProfile {
         }
     }
 
+    //get profile by id
+    async getPatientProfileById() {
+        const query = `SELECT * FROM patientprofile WHERE id = '${this.id}'`;
+        try {
+            const [rows] = await db.query(query);
+            if (rows.length > 0) {
+                return {
+                    isSuccess: true,
+                    data: rows[0],
+                };
+            }
+            return {
+                isSuccess: true,
+                data: [],
+                message: "Không tìm thấy hồ sơ",
+            };
+        } catch (error) {
+            console.log(error);
+            return {
+                isSuccess: false,
+                message: "Lấy hồ sơ thất bại",
+            };
+        }
+    }
+    //update profile
+    async updatePatientProfile() {
+        const query = `UPDATE patientprofile SET fullname = '${this.name}', phone = '${this.phone}', email = '${this.email}', province = '${this.province}', district = '${this.district}', commune = '${this.ward}', birthday = '${this.birthday}', sex = '${this.sex}', career = '${this.job}', nation = '${this.ethnic}', identify = '${this.identity}', curentAddress = '${this.address}' WHERE id = '${this.id}'`;
+        try {
+            const [rows] = await db.query(query);
+            if (rows.affectedRows > 0) {
+                return {
+                    isSuccess: true,
+                    message: "Cập nhật hồ sơ thành công",
+                };
+            }
+            return {
+                isSuccess: false,
+                message: "Cập nhật hồ sơ thất bại",
+            };
+        } catch (error) {
+            console.log(error);
+            return {
+                isSuccess: false,
+                message: "Cập nhật hồ sơ thất bại",
+            };
+        }
+    }
+
+    //delete profile
+    async deletePatientProfile() {
+        const query = `DELETE FROM patientprofile WHERE id = '${this.id}'`;
+        try {
+            db.query(query);
+            return {
+                isSuccess: true,
+                message: "Xóa hồ sơ thành công",
+            };
+        } catch (error) {
+            console.log(error);
+            return {
+                isSuccess: false,
+                message: error.message,
+            };
+        }
+    }
+
     //getters
     getID() {
         return this.id;

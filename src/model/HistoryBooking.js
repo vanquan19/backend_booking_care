@@ -1,13 +1,13 @@
 import db from "../config/db.js";
 export default class HistoryBooking {
-    constructor(id, clinicId, specialtyId, profileId, patientId, doctorId, pakageId, time, date, month, year, status) {
+    constructor(id, clinicId, specialtyId, profileId, patientId, doctorId, packageId, time, date, month, year, status) {
         this.id = id;
         this.clinicId = clinicId;
         this.specialtyId = specialtyId;
         this.profileId = profileId;
         this.patientId = patientId;
         this.doctorId = doctorId;
-        this.pakageId = pakageId;
+        this.packageId = packageId;
         this.time = time;
         this.date = date;
         this.month = month;
@@ -16,8 +16,8 @@ export default class HistoryBooking {
     }
 
     async createHistoryBooking() {
-        const query = `INSERT INTO historybooking (id, clinicId , specialtyId , profileId , patientId , doctorId , pakageId , time, date, month, year) VALUES
-         ('${this.id}', '${this.clinicId}', '${this.specialtyId || ""}', '${this.profileId}', '${this.patientId}', '${this.doctorId || ""}', '${this.pakageId || ""}', '${this.time}', '${
+        const query = `INSERT INTO historybooking (id, clinicId , specialtyId , profileId , patientId , doctorId , packageId , time, date, month, year) VALUES
+         ('${this.id}', '${this.clinicId}', '${this.specialtyId || ""}', '${this.profileId}', '${this.patientId}', '${this.doctorId || ""}', '${this.packageId || ""}', '${this.time}', '${
             this.date
         }', '${this.month}', '${this.year}')`;
 
@@ -43,12 +43,46 @@ export default class HistoryBooking {
     }
 
     async getHistoryBooking() {
-        const query = `SELECT * FROM historybooking WHERE clinicId = '${this.clinicId}'`;
+        const query = `
+        SELECT historybooking.*, patientprofile.fullname, patientprofile.birthday, patientprofile.career, patientprofile.commune,
+            patientprofile.district, patientprofile.province, patientprofile.email, patientprofile.phone, patientprofile.nation,
+             patientprofile.sex, patientprofile.identify, patientprofile.curentAddress
+        FROM historybooking
+        INNER JOIN patient ON historybooking.patientId = patient.id
+        INNER JOIN patientprofile ON historybooking.profileId = patientprofile.id
+        WHERE historybooking.patientId = '${this.patientId}' AND historybooking.status = '${this.status}'
+        ORDER BY historybooking.createdAt DESC
+        `;
         try {
             const [rows] = await db.query(query);
+            const datas = rows.map(async (data) => {
+                if (data.specialtyId) {
+                    const [specialty] = await db.query(`SELECT id, name FROM specialty WHERE id = '${data.specialtyId}'`);
+                    const [doctor] = await db.query(`SELECT id, firstname, lastname, price FROM doctor WHERE id = '${data.doctorId}'`);
+                    return {
+                        ...data,
+                        type: "Đặt khám theo chuyên khoa",
+                        specialty: specialty[0],
+                        doctor: doctor[0],
+                    };
+                } else if (data.packageId) {
+                    const [packageInfo] = await db.query(`SELECT id, name, price FROM examinationpackage WHERE id = '${data.packageId}'`);
+                    const [doctor] = await db.query(`SELECT id, firstname, lastname FROM doctor WHERE id = '${data.doctorId}'`);
+                    return {
+                        ...data,
+                        type: "Đặt khám theo gói khám",
+                        package: packageInfo[0],
+                        doctor: doctor[0],
+                    };
+                } else
+                    return {
+                        ...data,
+                    };
+            });
             return {
                 isSuccess: true,
-                data: rows,
+                message: "Lấy lịch sử đặt khám thành công",
+                data: await Promise.all(datas),
             };
         } catch (error) {
             console.log(error);
@@ -74,24 +108,21 @@ export default class HistoryBooking {
             const [rows] = await db.query(query);
             const datas = rows.map(async (data) => {
                 if (data.specialtyId) {
-                    const [specialty] = await db.query(`SELECT id, name, price FROM specialty WHERE id = '${data.specialtyId}'`);
+                    const [specialty] = await db.query(`SELECT id, name FROM specialty WHERE id = '${data.specialtyId}'`);
+                    const [doctor] = await db.query(`SELECT id, firstname, lastname, price FROM doctor WHERE id = '${data.doctorId}'`);
                     return {
                         ...data,
                         type: "Đặt khám theo chuyên khoa",
                         specialty: specialty[0],
+                        doctor: doctor[0],
                     };
-                } else if (data.pakageId) {
-                    const [pakage] = await db.query(`SELECT id, name, price FROM examinationpackage WHERE id = '${data.pakageId}'`);
+                } else if (data.packageId) {
+                    const [pakage] = await db.query(`SELECT id, name, price FROM examinationpackage WHERE id = '${data.packageId}'`);
+                    const [doctor] = await db.query(`SELECT id, firstname, lastname FROM doctor WHERE id = '${data.doctorId}'`);
                     return {
                         ...data,
-                        type: "Đặt khám theo gói",
-                        pakage: pakage[0],
-                    };
-                } else if (data.doctorId) {
-                    const [doctor] = await db.query(`SELECT id, firstname, lastname, price FROM doctor WHERE id = '${data.doctorId}'`);
-                    return {
-                        ...data,
-                        type: "Đặt khám theo bác sĩ",
+                        type: "Đặt khám theo gói khám",
+                        package: pakage[0],
                         doctor: doctor[0],
                     };
                 } else
@@ -111,13 +142,64 @@ export default class HistoryBooking {
             };
         }
     }
+    async getHistoryBookingByDate(listProfile) {
+        try {
+            // Sử dụng Promise.all để đợi tất cả các Promise trong mảng results hoàn thành
+            const results = await Promise.all(
+                listProfile.map(async (profile) => {
+                    const query = `
+                    SELECT historybooking.*, patientprofile.fullname, patientprofile.email, patientprofile.phone 
+                    FROM historybooking
+                    INNER JOIN patient ON historybooking.patientId = patient.id
+                    INNER JOIN patientprofile ON historybooking.profileId = patientprofile.id
+                    WHERE historybooking.id = '${profile}' AND historybooking.status BETWEEN 2 AND 5
+                    ORDER BY STR_TO_DATE(SUBSTRING_INDEX(historybooking.time, ' - ', 1), '%H:%i') ASC
+                    `;
+                    const [rows] = await db.query(query);
+                    if (rows[0].specialtyId) {
+                        const [specialty] = await db.query(`SELECT id, name FROM specialty WHERE id = '${rows[0].specialtyId}'`);
+                        const [doctor] = await db.query(`SELECT id, firstname, lastname, price FROM doctor WHERE id = '${rows[0].doctorId}'`);
+                        return {
+                            ...rows[0],
+                            type: "Đặt khám theo chuyên khoa",
+                            specialty: specialty[0],
+                            doctor: doctor[0],
+                        };
+                    } else if (rows[0].packageId) {
+                        const [pakage] = await db.query(`SELECT id, name FROM examinationpackage WHERE id = '${rows[0].packageId}'`);
+                        const [doctor] = await db.query(`SELECT id, firstname, lastname FROM doctor WHERE id = '${rows[0].doctorId}'`);
+                        return {
+                            ...rows[0],
+                            type: "Đặt khám theo gói khám",
+                            package: pakage[0],
+                            doctor: doctor[0],
+                        };
+                    } else
+                        return {
+                            ...rows[0],
+                        };
+                })
+            );
+
+            return {
+                isSuccess: true,
+                data: results,
+            };
+        } catch (error) {
+            console.log(error);
+            return {
+                isSuccess: false,
+                message: "Lấy lịch sử đặt khám thất bại",
+            };
+        }
+    }
 
     async getAmountBookingByStatus() {
-        const query1 = `SELECT COUNT(*) as amount FROM historybooking WHERE clinicId = '${this.clinicId}' AND status = 1`;
-        const query2 = `SELECT COUNT(*) as amount FROM historybooking WHERE clinicId = '${this.clinicId}' AND status = 2`;
-        const query3 = `SELECT COUNT(*) as amount FROM historybooking WHERE clinicId = '${this.clinicId}' AND status = 3`;
-        const query4 = `SELECT COUNT(*) as amount FROM historybooking WHERE clinicId = '${this.clinicId}' AND status = 4`;
-        const query5 = `SELECT COUNT(*) as amount FROM historybooking WHERE clinicId = '${this.clinicId}' AND status = 5`;
+        const query1 = `SELECT COUNT(*) as amount FROM historybooking WHERE clinicId = '${this.clinicId}' AND status = 1 ${this.doctorId ? `AND doctorId = '${this.doctorId}'` : ""}`;
+        const query2 = `SELECT COUNT(*) as amount FROM historybooking WHERE clinicId = '${this.clinicId}' AND status = 2 ${this.doctorId ? `AND doctorId = '${this.doctorId}'` : ""}`;
+        const query3 = `SELECT COUNT(*) as amount FROM historybooking WHERE clinicId = '${this.clinicId}' AND status = 3 ${this.doctorId ? `AND doctorId = '${this.doctorId}'` : ""}`;
+        const query4 = `SELECT COUNT(*) as amount FROM historybooking WHERE clinicId = '${this.clinicId}' AND status = 4 ${this.doctorId ? `AND doctorId = '${this.doctorId}'` : ""}`;
+        const query5 = `SELECT COUNT(*) as amount FROM historybooking WHERE clinicId = '${this.clinicId}' AND status = 5 ${this.doctorId ? `AND doctorId = '${this.doctorId}'` : ""}`;
 
         try {
             const [rows1] = await db.query(query1);
@@ -165,6 +247,51 @@ export default class HistoryBooking {
         }
     }
 
+    async getAmountHistoryBooking() {
+        const query1 = `SELECT COUNT(*) as amount FROM historybooking WHERE patientId = '${this.patientId}' AND status = 1`;
+        const query2 = `SELECT COUNT(*) as amount FROM historybooking WHERE patientId = '${this.patientId}' AND status = 2`;
+        const query4 = `SELECT COUNT(*) as amount FROM historybooking WHERE patientId = '${this.patientId}' AND status = 4`;
+        const query5 = `SELECT COUNT(*) as amount FROM historybooking WHERE patientId = '${this.patientId}' AND status = 0`;
+
+        try {
+            const [rows1] = await db.query(query1);
+            const [rows2] = await db.query(query2);
+            const [rows4] = await db.query(query4);
+            const [rows5] = await db.query(query5);
+
+            return {
+                isSuccess: true,
+                data: [
+                    {
+                        status: 1,
+                        name: "Chờ xác nhận",
+                        amount: rows1[0].amount,
+                    },
+                    {
+                        status: 2,
+                        name: "Đã xác nhận",
+                        amount: rows2[0].amount,
+                    },
+                    {
+                        status: 4,
+                        name: "Đã khám",
+                        amount: rows4[0].amount,
+                    },
+                    {
+                        status: 0,
+                        name: "Đã hủy",
+                        amount: rows5[0].amount,
+                    },
+                ],
+            };
+        } catch (error) {
+            console.log(error);
+            return {
+                isSuccess: false,
+                message: "Lấy lịch sử đặt khám thất bại",
+            };
+        }
+    }
     async getHistoryBookingSearch(search) {
         const query = `
         SELECT historybooking.*, patientprofile.fullname, patientprofile.birthday, patientprofile.career, patientprofile.commune,
@@ -259,6 +386,57 @@ export default class HistoryBooking {
             };
         }
     }
+    //get history booking by doctor
+    async getHistoryByDoctor() {
+        const query = `
+        SELECT historybooking.*, patientprofile.fullname, patientprofile.birthday, patientprofile.career, patientprofile.commune,
+            patientprofile.district, patientprofile.province, patientprofile.email, patientprofile.phone, patientprofile.nation,
+             patientprofile.sex, patientprofile.identify, patientprofile.curentAddress as address
+        FROM historybooking
+        INNER JOIN patient ON historybooking.patientId = patient.id
+        INNER JOIN patientprofile ON historybooking.profileId = patientprofile.id
+        WHERE historybooking.doctorId = '${this.doctorId}' AND historybooking.status = '${this.status}'
+        ORDER BY historybooking.createdAt DESC
+        `;
+        try {
+            const [rows] = await db.query(query);
+
+            const datas = rows.map(async (data) => {
+                if (data.specialtyId) {
+                    const [specialty] = await db.query(`SELECT id, name FROM specialty WHERE id = '${data.specialtyId}'`);
+                    const [doctor] = await db.query(`SELECT id, firstname, lastname, price FROM doctor WHERE id = '${data.doctorId}'`);
+                    return {
+                        ...data,
+                        type: "Đặt khám theo chuyên khoa",
+                        specialty: specialty[0],
+                        doctor: doctor[0],
+                    };
+                } else if (data.packageId) {
+                    const [pakage] = await db.query(`SELECT id, name, price FROM examinationpackage WHERE id = '${data.packageId}'`);
+                    const [doctor] = await db.query(`SELECT id, firstname, lastname FROM doctor WHERE id = '${data.doctorId}'`);
+                    return {
+                        ...data,
+                        type: "Đặt khám theo gói khám",
+                        package: pakage[0],
+                        doctor: doctor[0],
+                    };
+                } else
+                    return {
+                        ...data,
+                    };
+            });
+            return {
+                isSuccess: true,
+                data: await Promise.all(datas),
+            };
+        } catch (error) {
+            console.log(error);
+            return {
+                isSuccess: false,
+                message: "Lấy lịch sử đặt khám thất bại",
+            };
+        }
+    }
 
     // getter and setter
     getID() {
@@ -279,8 +457,8 @@ export default class HistoryBooking {
     getDoctorId() {
         return this.doctorId;
     }
-    getPakageId() {
-        return this.pakageId;
+    getPackageId() {
+        return this.packageId;
     }
     getTime() {
         return this.time;
@@ -316,8 +494,8 @@ export default class HistoryBooking {
     setDoctorId(doctorId) {
         this.doctorId = doctorId;
     }
-    setPakageId(pakageId) {
-        this.pakageId = pakageId;
+    setPackageId(packageId) {
+        this.packageId = packageId;
     }
     setTime(time) {
         this.time = time;

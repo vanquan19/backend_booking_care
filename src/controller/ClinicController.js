@@ -14,6 +14,7 @@ class ClinicController {
         app.get("/api/v1/clinic/number", this.getNumberClinic);
         app.get("/api/v1/clinic/read-follow-type", this.readClinicByType);
         app.get("/api/v1/clinic/search-clinic", this.searchClinic);
+        app.post("/api/v1/clinic/set-content", AuthController.verifyToken, this.setContentClinic);
         //CRUD specialty
         app.get("/api/v1/clinic/specialty/read", this.readSpecialty);
         app.get("/api/v1/clinic/specialty/read-public", this.readSpecialtyPublic);
@@ -32,6 +33,29 @@ class ClinicController {
 
         //get image of clinic
         app.get("/api/v1/clinic/image", this.getImageClinic);
+    }
+
+    async setContentClinic(req, res) {
+        try {
+            const { id, content } = req.body;
+            const [rows] = await db.query(`UPDATE clinics SET content = '${content}' WHERE id = '${id}'`);
+            if (rows.affectedRows === 0) {
+                return res.status(400).json({
+                    isSuccess: false,
+                    message: "Cập nhật nội dung thất bại",
+                });
+            }
+            return res.status(200).json({
+                isSuccess: true,
+                message: "Cập nhật nội dung thành công",
+            });
+        } catch (error) {
+            console.log(error);
+            return res.status(500).json({
+                isSuccess: false,
+                message: "Lỗi server",
+            });
+        }
     }
 
     async searchClinic(req, res) {
@@ -562,13 +586,11 @@ class ClinicController {
 
     async createSpecialty(req, res) {
         try {
-            const { name, clinicId, description, price, discount } = req.body;
+            const { name, clinicId, description } = req.body;
             console.log(req.body);
 
             const id = uuidv4();
-            const [rows] = await db.query(
-                `INSERT INTO specialty (id, name, clinicId, description, price, discount) VALUES ('${id}', '${name}', '${clinicId}', '${description}', '${price}', '${discount}')`
-            );
+            const [rows] = await db.query(`INSERT INTO specialty (id, name, clinicId, description) VALUES ('${id}', '${name}', '${clinicId}', '${description}')`);
             if (rows.affectedRows === 0) {
                 return res.status(400).json({
                     isSuccess: false,
@@ -590,12 +612,12 @@ class ClinicController {
 
     async updateSpecialty(req, res) {
         try {
-            const { id, name, description, price } = req.body;
+            const { id, name, description } = req.body;
             const [rows] = await db.query(
                 `UPDATE specialty SET 
                     ${name ? `name = '${name}',` : ""} 
                     ${description ? `description = '${description}',` : ""} 
-                    ${price ? `price = '${price}',` : "Đang cập nhật"} 
+                    
                     `.replace(/,\s*$/, "") + // Remove trailing comma
                     ` WHERE id = '${id}'`
             );
@@ -683,8 +705,9 @@ class ClinicController {
                 offset = (page - 1) * limit;
             }
             const [rows] = await db.query(`
-                SELECT clinics.id as clinicId, clinics.name as clinicName, clinics.star, clinics.schedule, clinics.address, clinics.description , examinationpackage.* FROM examinationpackage 
+                SELECT clinics.id as clinicId, clinics.name as clinicName, clinics.star, clinics.schedule, clinics.address, clinics.description , examinationpackage.*, doctor.firstname, doctor.lastname FROM examinationpackage 
                 INNER JOIN clinics ON clinics.id = examinationpackage.clinicId
+                INNER JOIN doctor ON doctor.id = examinationpackage.doctorId
                 WHERE examinationpackage.clinicId = '${clinicId}'
                 ${search ? `AND examinationpackage.name LIKE '%${search}%'` : ""}
                 ${sort ? `ORDER BY ${sort + " " + (sort !== "createdAt" ? "ASC" : "DESC")}` : ""}
@@ -730,10 +753,10 @@ class ClinicController {
     }
     async createMedicalPackage(req, res) {
         try {
-            const { name, clinicId, description, price, discount } = req.body;
+            const { name, clinicId, description, price, doctorId } = req.body;
             const id = uuidv4();
             const [rows] = await db.query(
-                `INSERT INTO examinationpackage (id, name, clinicId, description, price, discount) VALUES ('${id}', '${name}', '${clinicId}', '${description}', '${price}', '${discount}')`
+                `INSERT INTO examinationpackage (id, name, clinicId, description, price, doctorId) VALUES ('${id}', '${name}', '${clinicId}', '${description}', '${price}', '${doctorId}')`
             );
             if (rows.affectedRows === 0) {
                 return res.status(400).json({
@@ -755,13 +778,13 @@ class ClinicController {
     }
     async updateMedicalPackage(req, res) {
         try {
-            const { id, name, description, price, discount } = req.body;
+            const { id, name, description, price, doctorId } = req.body;
             const [rows] = await db.query(
                 `UPDATE examinationpackage SET 
                     ${name ? `name = '${name}',` : ""} 
                     ${description ? `description = '${description}',` : ""} 
                     ${price ? `price = '${price}',` : ""} 
-                    ${discount ? `discount = '${discount}',` : ""} 
+                    ${doctorId ? `doctorId = '${doctorId}',` : ""} 
                     `.replace(/,\s*$/, "") + // Remove trailing comma
                     ` WHERE id = '${id}'`
             );

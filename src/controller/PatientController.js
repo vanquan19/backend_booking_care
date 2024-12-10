@@ -19,6 +19,7 @@ export default class PatientController {
             return res.status(404).json(result);
         }
         const data = {
+            id: result.data.id,
             name: result.data.name,
             phone: result.data.phone,
             email: result.data.email,

@@ -106,7 +106,7 @@ export default class AuthController {
         } else if (role == "doctor") {
             console.log("doctor");
             [[dataUser]] = await connection.query(
-                "SELECT users.id, doctor.firstname, doctor.lastname, users.email, users.phone, users.image, clinics.name as clinicName, doctor.clinicId, doctor.position FROM users INNER JOIN doctor ON users.id = doctor.userID INNER JOIN clinics ON clinics.id = doctor.clinicId WHERE users.id = ?",
+                "SELECT users.id, doctor.firstname, doctor.lastname, users.email, users.phone, users.image, clinics.name as clinicName, doctor.clinicId, doctor.position, doctor.id as doctorId FROM users INNER JOIN doctor ON users.id = doctor.userID INNER JOIN clinics ON clinics.id = doctor.clinicId WHERE users.id = ?",
                 [user.id]
             );
         } else if (role == "patient") {
