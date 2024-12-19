@@ -1,7 +1,8 @@
 import { v4 as uuidv4 } from "uuid";
 import AuthController from "./AuthController.js";
 import HistoryBooking from "../model/HistoryBooking.js";
-import app from "../index.js";
+import app, { socket } from "../index.js";
+import Notification from "../model/Notification.js";
 
 export default class HistoryBookingController {
     routes() {
@@ -28,6 +29,10 @@ export default class HistoryBookingController {
                     message: result.message,
                 });
             }
+            const io = socket;
+            io.to("clinic_" + clinicId).emit("new_booking", { message: "Có lịch khám mới" });
+            const notification = new Notification(req.user.id, clinicId, "Có một lịch khám mới cần xác nhận");
+            notification.save();
             return res.status(200).json({
                 isSuccess: true,
                 message: "Tạo phiếu khám thành công",
@@ -58,7 +63,7 @@ export default class HistoryBookingController {
 
     async updateStatusHistoryBooking(req, res) {
         try {
-            const { id, status } = req.body;
+            const { id, status, clinicId, fullname, clinicName, resson, userId } = req.body;
             const historyBooking = new HistoryBooking();
             historyBooking.setID(id);
             historyBooking.setStatus(status);
@@ -69,6 +74,24 @@ export default class HistoryBookingController {
                     message: result.message,
                 });
             }
+
+            const io = socket;
+            if (status === 0) {
+                io.to("clinic_" + clinicId).emit("cancel_booking", { message: fullname + " đã hủy lịch khám" });
+                const notification = new Notification(req.user.id, clinicId, fullname + " đã hủy lịch khám");
+                notification.save();
+            } else if (status === 2) {
+                io.to("user_" + userId).emit("confirm_booking", { message: clinicName + " đã xác nhận lịch khám!" });
+                const notification = new Notification(clinicId, userId, clinicName + " đã xác nhận lịch khám");
+                notification.save();
+            } else if (status === 5) {
+                historyBooking.setNote(clinicName + " đã từ chối lịch khám" + ", Lý do: " + resson);
+                historyBooking.updateNote();
+                io.to("user_" + userId).emit("refuse_booking", { message: clinicName + " đã từ chối lịch khám!" + ", Lý do: " + resson });
+                const notification = new Notification(clinicId, userId, clinicName + " đã từ chối lịch khám" + ", Lý do: " + resson);
+                notification.save();
+            }
+
             return res.status(200).json({
                 isSuccess: true,
                 message: "Cập nhật trạng thái phiếu khám thành công",

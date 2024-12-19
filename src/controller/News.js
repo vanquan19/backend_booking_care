@@ -10,13 +10,14 @@ class NewsController {
     }
 
     getTopNews(req, res) {
+        const { limit } = req.query;
         fs.readFile(path.join(__dirname, "public", "news.json"), "utf8", (err, data) => {
             if (err) {
                 console.log(err);
             } else {
                 const news = JSON.parse(data);
                 //get top 6 news
-                const topNews = news.results.slice(0, TOPNEWS);
+                const topNews = news.results.slice(0, limit ? limit : TOPNEWS);
                 res.status(200).json({
                     isSuccess: true,
                     toltalNews: topNews.length,

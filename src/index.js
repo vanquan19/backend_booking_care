@@ -2,7 +2,6 @@ import express from "express";
 import dotenv from "dotenv";
 dotenv.config();
 import cors from "cors";
-import { Server } from "socket.io";
 import AuthController from "./controller/AuthController.js";
 import ClinicController from "./controller/ClinicController.js";
 import DoctorController from "./controller/DoctorController.js";
@@ -14,8 +13,10 @@ import NewsController from "./controller/News.js";
 import questionAndAnswerController from "./controller/QuestionController.js";
 import instructionRoutes from "./controller/InstructionController.js";
 import contacts from "./controller/ContactController.js";
+import notification from "./controller/NotificationController.js";
 import path from "path";
 import { fileURLToPath } from "url";
+import { Server } from "socket.io";
 
 const __filename = fileURLToPath(import.meta.url);
 export const __dirname = path.dirname(__filename);
@@ -34,59 +35,25 @@ const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
 
-const io = new Server(server, {
+export const io = new Server(server, {
     cors: {
         origin: "*",
     },
 });
 
-const clinicNotification = {};
-
 io.on("connection", (socket) => {
     console.log("a user connected");
-
-    //-------------------------------
-    socket.on("create-booking", (data) => {
-        //increase notification count
-        if (clinicNotification[data.clinicId]) {
-            clinicNotification[data.clinicId] += 1;
-        } else {
-            clinicNotification[data.clinicId] = 1;
-        }
-        socket.broadcast.emit(`new-booking-${data.clinicId}`, {
-            ...data,
-            unRead: clinicNotification[data.clinicId],
-        });
+    socket.on("join_room", (room) => {
+        socket.join(room);
+        console.log("user join room", room);
     });
 
-    socket.on("view-bookings", (data) => {
-        const clinicId = data.clinicId;
-
-        // Đặt lại số lượng thông báo chưa đọc về 0
-        if (clinicNotification[clinicId]) {
-            clinicNotification[clinicId] = 0;
-        }
-
-        // Thông báo trạng thái mới
-        socket.emit(`reset-notifications-${clinicId}`, {
-            clinicId,
-            unRead: 0,
-        });
-    });
-    // --------------------------------
-
-    // ------- sen notification to doctor -------
-    socket.on("accept-booking", (data) => {
-        socket.broadcast.emit(`recive-notify-accept-${data.reciverId}`, {
-            ...data,
-            message: "Lịch hẹn của bạn đã được xác nhận",
-        });
-    });
-    // ------------------------------------------
     socket.on("disconnect", () => {
         console.log("user disconnected");
     });
 });
+
+export const socket = io;
 
 const authRoutes = new AuthController();
 authRoutes.routes();
@@ -107,3 +74,4 @@ newsController.routes();
 questionAndAnswerController.routes();
 instructionRoutes.routes();
 contacts.routes();
+notification.routes();

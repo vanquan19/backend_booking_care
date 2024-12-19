@@ -37,10 +37,10 @@ export default class DoctorController {
 
     async readAllPublicDoctor(req, res) {
         try {
-            const { limit, page, sort, search, clinicId } = req.query;
+            const { limit, page, sort, search, clinicId, specialtyId } = req.query;
 
             const doctor = new Doctor();
-            const doctors = await doctor.getAllPublicDoctor(sort, search, page, limit, clinicId);
+            const doctors = await doctor.getAllPublicDoctor(sort, search, page, limit, clinicId, specialtyId);
             if (!doctors.isSuccess) {
                 return res.status(401).json({
                     isSuccess: false,

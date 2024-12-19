@@ -153,7 +153,7 @@ class Doctor extends User {
         }
     }
 
-    async getAllPublicDoctor(sort, search, page, limit, clinicId) {
+    async getAllPublicDoctor(sort, search, page, limit, clinicId, specialtyId) {
         try {
             let sql = `
             SELECT doctor.id, doctor.firstname, doctor.lastname, doctor.position, doctor.specialize, doctor.price, clinics.name as clinicName, clinics.address as clinicAddress, users.phone, users.email, users.image, doctor.isPublic as isPublic, specialty.name as specialtyName
@@ -161,7 +161,7 @@ class Doctor extends User {
             INNER JOIN clinics ON doctor.clinicID = clinics.id
             INNER JOIN users ON doctor.userID = users.id
             LEFT JOIN specialty ON doctor.specialize = specialty.id
-            WHERE doctor.isPublic = 1  
+            WHERE doctor.isPublic = 1 AND clinics.id = '${clinicId}' AND doctor.specialize = '${specialtyId}'
 
             `;
             if (clinicId) {

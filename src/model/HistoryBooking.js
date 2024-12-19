@@ -1,6 +1,6 @@
 import db from "../config/db.js";
 export default class HistoryBooking {
-    constructor(id, clinicId, specialtyId, profileId, patientId, doctorId, packageId, time, date, month, year, status) {
+    constructor(id, clinicId, specialtyId, profileId, patientId, doctorId, packageId, time, date, month, year, status, note) {
         this.id = id;
         this.clinicId = clinicId;
         this.specialtyId = specialtyId;
@@ -13,6 +13,7 @@ export default class HistoryBooking {
         this.month = month;
         this.year = year;
         this.status = status;
+        this.note = note;
     }
 
     async createHistoryBooking() {
@@ -438,6 +439,29 @@ export default class HistoryBooking {
         }
     }
 
+    async updateNote() {
+        try {
+            const query = `UPDATE historybooking SET note = ? WHERE id = ?`;
+            const [rows] = await db.query(query, [this.note, this.id]);
+            if (rows.affectedRows > 0) {
+                return {
+                    isSuccess: true,
+                    message: "Cập nhật ghi chú thành công",
+                };
+            }
+            return {
+                isSuccess: false,
+                message: "Cập nhật ghi chú thất bại",
+            };
+        } catch (error) {
+            console.log(error);
+            return {
+                isSuccess: false,
+                message: error.message,
+            };
+        }
+    }
+
     // getter and setter
     getID() {
         return this.id;
@@ -475,6 +499,9 @@ export default class HistoryBooking {
     getStatus() {
         return this.status;
     }
+    getNote() {
+        return this.note;
+    }
 
     setID(id) {
         this.id = id;
@@ -511,5 +538,8 @@ export default class HistoryBooking {
     }
     setStatus(status) {
         this.status = status;
+    }
+    setNote(note) {
+        this.note = note;
     }
 }
