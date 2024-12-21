@@ -65,8 +65,18 @@ export default class User {
 
     async createUser() {
         try {
-            const sql = `INSERT INTO users (id, username, password, role, phone, email, image) VALUES ('${this.getUserId()}', '${this.getUsername()}', '${this.getPassword()}', '${this.getRole()}', '${this.getPhone()}', '${this.getEmail()}', '${this.getImage()}')`;
-            const result = await db.query(sql);
+            const sql = `INSERT INTO users (id, username, password, role, phone, email, image) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?)`;
+
+            const result = await db.query(sql, [
+            this.getUserId(),
+            this.getUsername(),
+            this.getPassword(),
+            this.getRole(),
+            this.getPhone(),
+            this.getEmail(),
+            this.getImage()
+            ]);
 
             return { isSuccess: true, data: result, userId: this.getUserId(), message: "Tạo tài khoản thành công!" };
         } catch (error) {
@@ -78,22 +88,54 @@ export default class User {
 
     async updateUser() {
         try {
-            let sql = `UPDATE users SET 
-                ${this.getUsername() ? `username = '${this.getUsername()}',` : ""}
-                ${this.getPassword() ? `password = '${this.getPassword()}',` : ""}
-                ${this.getPhone() ? `phone = '${this.getPhone()}',` : ""}
-                ${this.getEmail() ? `email = '${this.getEmail()}',` : ""}
-                ${this.getImage() ? `image = '${this.getImage()}',` : ""}
-                WHERE id = '${this.getUserId()}'
-            `;
-            sql = sql.replace(/,\s*WHERE/, " WHERE");
-            const result = await db.query(sql);
-
-            return { isSuccess: true, data: result, message: "Cập nhật tài khoản thành công!" };
+            // Start building the SQL query with the fields to update
+            let sql = `UPDATE users SET `;
+            const values = [];
+    
+            // Conditionally add fields to update and store their values
+            if (this.getUsername()) {
+                sql += `username = ?, `;
+                values.push(this.getUsername());
+            }
+            if (this.getPassword()) {
+                sql += `password = ?, `;
+                values.push(this.getPassword());
+            }
+            if (this.getPhone()) {
+                sql += `phone = ?, `;
+                values.push(this.getPhone());
+            }
+            if (this.getEmail()) {
+                sql += `email = ?, `;
+                values.push(this.getEmail());
+            }
+            if (this.getImage()) {
+                sql += `image = ?, `;
+                values.push(this.getImage());
+            }
+    
+            // Remove the trailing comma and space
+            sql = sql.slice(0, -2); 
+    
+            // Add the WHERE clause
+            sql += ` WHERE id = ?`;
+            values.push(this.getUserId());
+    
+            // Execute the query
+            const result = await db.query(sql, values);
+    
+            return { 
+                isSuccess: true, 
+                data: result, 
+                message: "Cập nhật tài khoản thành công!" 
+            };
         } catch (error) {
             console.log(error);
-
-            return { isSuccess: false, message: error.message };
+            return { 
+                isSuccess: false, 
+                message: error.message 
+            };
         }
     }
+    
 }

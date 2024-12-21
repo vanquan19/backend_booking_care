@@ -153,6 +153,5 @@ export default class AuthController {
             res.status(400).json({ isSuccess: false, message: "Username and password are required" });
             return;
         }
-        const service = new AuthService();
     }
 }

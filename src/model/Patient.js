@@ -42,8 +42,8 @@ class Patient {
 
     // check phone exist in database
     async checkPhoneExist() {
-        const query = `SELECT * FROM patient WHERE phone = '${this.phone}'`;
-        const [rows] = await db.query(query);
+        const query = `SELECT * FROM patient WHERE phone = ?`;
+        const [rows] = await db.query(query, [this.phone]);
         if (rows.length > 0) {
             return {
                 isSuccess: true,
@@ -60,18 +60,30 @@ class Patient {
 
     // create patient
     async createPatient() {
-        const query = `INSERT INTO patient (id, name, phone, email, address) VALUES ('${this.id}', '${this.name}', '${this.phone}', '${this.email}', '${this.address}')`;
-        const [rows] = await db.query(query);
-        if (rows.affectedRows > 0) {
+        try{
+            const query = `
+                INSERT INTO patient (id, name, phone, email, address) 
+                VALUES (?, ?, ?, ?, ?)
+            `;
+            const [rows] = await db.query(query, [this.id, this.name, this.phone, this.email, this.address]);
+            if (rows.affectedRows > 0) {
+                return {
+                    isSuccess: true,
+                    message: "Tạo tài khoản thành công",
+                };
+            }
             return {
-                isSuccess: true,
-                message: "Tạo tài khoản thành công",
+                isSuccess: false,
+                message: "Tạo tài khoản thất bại",
+            };
+        }catch(error){
+            console.log(error);
+            return {
+                isSuccess: false,
+                message: error.message,
             };
         }
-        return {
-            isSuccess: false,
-            message: "Tạo tài khoản thất bại",
-        };
+    
     }
 }
 export default Patient;

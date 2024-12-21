@@ -15,21 +15,6 @@ class ClinicController {
         app.get("/api/v1/clinic/read-follow-type", this.readClinicByType);
         app.get("/api/v1/clinic/search-clinic", this.searchClinic);
         app.post("/api/v1/clinic/set-content", AuthController.verifyToken, this.setContentClinic);
-        //CRUD specialty
-        app.get("/api/v1/clinic/specialty/read", this.readSpecialty);
-        app.get("/api/v1/clinic/specialty/read-public", this.readSpecialtyPublic);
-        app.post("/api/v1/clinic/specialty/create", AuthController.verifyToken, this.createSpecialty);
-        app.put("/api/v1/clinic/specialty/update", AuthController.verifyToken, this.updateSpecialty);
-        app.delete("/api/v1/clinic/specialty/delete", AuthController.verifyToken, this.deleteSpecialty);
-        app.post("/api/v1/clinic/specialty/set-public", AuthController.verifyToken, this.setPublicSpecialty);
-
-        //CRUD medical pakage
-        app.get("/api/v1/clinic/medical-package/read", this.readMedicalPackage);
-        app.post("/api/v1/clinic/medical-package/create", AuthController.verifyToken, this.createMedicalPackage);
-        app.put("/api/v1/clinic/medical-package/update", AuthController.verifyToken, this.updateMedicalPackage);
-        app.delete("/api/v1/clinic/medical-package/delete", AuthController.verifyToken, this.deleteMedicalPackage);
-        app.post("/api/v1/clinic/medical-package/set-public", AuthController.verifyToken, this.setPublicMedicalPackage);
-        app.get("/api/v1/clinic/medical-package/read-public", this.readMedicalPackagePublic);
 
         //get image of clinic
         app.get("/api/v1/clinic/image", this.getImageClinic);
@@ -38,7 +23,7 @@ class ClinicController {
     async setContentClinic(req, res) {
         try {
             const { id, content } = req.body;
-            const [rows] = await db.query(`UPDATE clinics SET content = '${content}' WHERE id = '${id}'`);
+            const [rows] = await db.query(`UPDATE clinics SET content = ? WHERE id = ?`, [content, id]);
             if (rows.affectedRows === 0) {
                 return res.status(400).json({
                     isSuccess: false,
@@ -69,7 +54,10 @@ class ClinicController {
                 });
             }
             const offset = (page - 1) * limit;
-            const [rows] = await db.query(`SELECT * FROM clinics WHERE name LIKE '%${search}%' OR address LIKE '%${search}%' AND isPublic = 1 LIMIT ${limit} OFFSET ${offset}`);
+            let searchItem = `%${search}%`;
+            const [rows] = await db.query(`SELECT * FROM clinics WHERE name LIKE ? OR address LIKE ? AND isPublic = 1 LIMIT ? OFFSET ?`, 
+                [searchItem, searchItem, +limit, offset]
+            );
             if (rows.length === 0) {
                 return res.status(404).json({
                     isSuccess: true,
@@ -77,7 +65,9 @@ class ClinicController {
                     message: "Dữ liệu không tồn tại",
                 });
             }
-            const [count] = await db.query(`SELECT COUNT(*) as total FROM clinics WHERE name LIKE '%${search}%' OR address LIKE '%${search}%' AND isPublic = 1`);
+            const [count] = await db.query(`SELECT COUNT(*) as total FROM clinics WHERE name LIKE ? OR address LIKE ? AND isPublic = 1`, 
+                [searchItem, searchItem]
+            );
             const total = count[0].total;
             const totalPages = Math.ceil(total / limit);
             return res.status(200).json({
@@ -99,7 +89,7 @@ class ClinicController {
     async getImageClinic(req, res) {
         try {
             const { id } = req.query;
-            const [rows] = await db.query(`SELECT image FROM imageclinic WHERE clinicId = '${id}' AND isPublic = 1`);
+            const [rows] = await db.query(`SELECT image FROM imageclinic WHERE clinicId = ? AND isPublic = ?`, [id, 1]);
             if (rows.length === 0) {
                 return res.status(404).json({
                     isSuccess: true,
@@ -146,52 +136,68 @@ class ClinicController {
     }
     async createClinic(req, res) {
         try {
-            // get the token from the request body
             const { name, address, phone, email, description, image, schedule, content, establish, type, firstname, lastname } = req.body;
+    
+            // Kiểm tra thông tin đầu vào
             if (!name || !address || !phone || !email || !type || !firstname || !lastname) {
                 return res.status(400).json({
                     isSuccess: false,
                     message: "Vui lòng nhập đầy đủ thông tin",
                 });
             }
+    
             const username = (firstname + lastname)
                 .toLowerCase()
                 .normalize("NFD")
                 .replace(/[\u0300-\u036f]/g, "")
                 .replace(/\s/g, "");
-            // create an instance of the UserService class
+    
             const id = uuidv4();
-            const [rows] = await db.query(
-                `INSERT INTO clinics (id, name, address, phone, email, description, image, schedule, content, establish, type, createdBy) VALUES ('${id}', '${name}', '${address}', '${phone}', '${email}', '${description}', '${image}', '${
-                    schedule || ""
-                }', '${content || ""}', '${establish || ""}', '${type}', '${req.user.id}')`
-            );
-            //password is phone
             const password = await bcrypt.hash(phone, 10);
-
-            if (rows.affectedRows === 0) {
+    
+            // Thêm clinic
+            const [clinicResult] = await db.query(
+                `INSERT INTO clinics (id, name, address, phone, email, description, image, schedule, content, establish, type, createdBy) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [id, name, address, phone, email, description, image, schedule || "", content || "", establish || "", type, req.user.id]
+            );
+    
+            if (clinicResult.affectedRows === 0) {
                 return res.status(400).json({
                     isSuccess: false,
                     message: "Tạo phòng khám thất bại",
                 });
             }
+    
             const userId = uuidv4();
-            const [rows2] = await db.query(
-                `INSERT INTO users (id, email, phone, username, password, image, role) VALUES ('${userId}', '${email}', '${phone}', '${username}', '${password}', 'https://cdn-icons-png.flaticon.com/512/9703/9703596.png', 'doctor')`
+    
+            // Thêm user
+            const [userResult] = await db.query(
+                `INSERT INTO users (id, email, phone, username, password, image, role) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [userId, email, phone, username, password, 'https://cdn-icons-png.flaticon.com/512/9703/9703596.png', 'doctor']
             );
-            if (rows2.affectedRows === 0) {
+    
+            if (userResult.affectedRows === 0) {
                 return res.status(400).json({
                     isSuccess: false,
                     message: "Tạo tài khoản thất bại",
                 });
             }
-            const [rows3] = await db.query(
-                `INSERT INTO doctor (id, firstname, lastname, position, userID, clinicId) VALUES ('${uuidv4()}', '${firstname}', '${lastname}', 'managar', '${userId}', '${id}')`
+    
+            // Thêm doctor
+            const doctorId = uuidv4();
+            const [doctorResult] = await db.query(
+                `INSERT INTO doctor (id, firstname, lastname, position, userID, clinicId) 
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [doctorId, firstname, lastname, 'manager', userId, id]
             );
+    
             return res.status(200).json({
                 isSuccess: true,
                 message: "Tạo phòng khám thành công",
             });
+    
         } catch (error) {
             console.log(error);
             return res.status(500).json({
@@ -200,11 +206,12 @@ class ClinicController {
             });
         }
     }
+    
 
     async getNumberClinic(req, res) {
         try {
             const [count] = await db.query(`SELECT COUNT(*) as total FROM clinics`);
-            const [publicClinic] = await db.query(`SELECT COUNT(*) as total FROM clinics WHERE isPublic = 1`);
+            const [publicClinic] = await db.query(`SELECT COUNT(*) as total FROM clinics WHERE isPublic = ?`, [1]);
             const privateClicic = parseInt(count[0].total) - parseInt(publicClinic[0].total);
 
             return res.status(200).json({
@@ -223,146 +230,91 @@ class ClinicController {
 
     async readClinic(req, res) {
         try {
-            // get the token from the request body
             const { id, page, limit, sort, search } = req.query;
-            // create an instance of the UserService class
+    
+            // Trường hợp lấy tất cả phòng khám với phân trang
             if (id === "all") {
-                //get clinic with pagination
-                if (page && limit) {
-                    const offset = (page - 1) * limit;
-                    const [rows] = await db.query(
-                        `
-                        SELECT clinics.*, clinictypes.name as type, clinictypes.id as id_type 
-                        FROM clinics
-                        INNER JOIN clinictypes ON clinictypes.id = clinics.type
-                       
-                        ${search ? `WHERE clinics.name LIKE '%${search}%' OR clinics.address LIKE '%${search}%'` : ""} 
-                        ORDER BY clinics.${sort} ${sort === "createdAt" ? "DESC" : "ASC"} 
-                        LIMIT ${limit} OFFSET ${offset}
-                        `
-                    );
-
-                    const [manager] = await db.query(`SELECT doctor.firstname, doctor.lastname FROM doctor WHERE clinicId = '${rows[0].id}' AND position = 'manager'`);
-
-                    if (rows.length === 0) {
-                        return res.status(404).json({
-                            isSuccess: false,
-                            message: "Dữ liệu không tồn tại",
-                        });
-                    }
-                    const [count] = await db.query(`SELECT COUNT(*) as total FROM clinics ${search ? `WHERE name LIKE '%${search}%' OR address LIKE '%${search}%'` : ""}`);
-                    const total = count[0].total;
-                    const totalPages = Math.ceil(total / limit);
-                    const data = rows.map((item) => {
-                        return {
-                            ...item,
-                            firstname: manager[0].firstname,
-                            lastname: manager[0].lastname,
-                        };
-                    });
-                    return res.status(200).json({
-                        data: data,
-                        page: page,
-                        isSuccess: true,
-                        totalPages: totalPages,
-                        message: "Tải dữ liệu thành công",
-                    });
+                let query = `
+                    SELECT clinics.*, clinictypes.name as type, clinictypes.id as id_type 
+                    FROM clinics
+                    INNER JOIN clinictypes ON clinictypes.id = clinics.type
+                `;
+    
+                const queryParams = [];
+                const countParams = [];
+    
+                // Tìm kiếm
+                if (search) {
+                    query += ` WHERE clinics.name LIKE ? OR clinics.address LIKE ?`;
+                    queryParams.push(`%${search}%`, `%${search}%`);
+                    countParams.push(`%${search}%`, `%${search}%`);
                 }
-                //get all clinics
-                const [rows] = await db.query(`SELECT * FROM clinics`);
+    
+                // Phân trang
+                if (page && limit) {
+                    const offset = (parseInt(page) - 1) * parseInt(limit);
+                    query += ` ORDER BY clinics.${sort === "createdAt" ? "createdAt" : "name"} ${sort === "createdAt" ? "DESC" : "ASC"}`;
+                    query += ` LIMIT ? OFFSET ?`;
+                    queryParams.push(parseInt(limit), offset);
+                }
+    
+                const [rows] = await db.query(query, queryParams);
+    
                 if (rows.length === 0) {
                     return res.status(404).json({
                         isSuccess: false,
                         message: "Dữ liệu không tồn tại",
                     });
                 }
-                return res.status(200).json({
-                    data: rows,
-                    isSuccess: true,
-                    message: "Tải dữ liệu thành công",
-                });
-            } else {
-                //get clinic by id
-                const [rows] = await db.query(`
-                    SELECT clinics.*, clinictypes.name as type FROM clinics
-                    INNER JOIN clinictypes ON clinictypes.id = clinics.type
-                    WHERE clinics.id = '${id}'
-                    `);
-                if (rows.length === 0) {
-                    return res.status(404).json({
-                        isSuccess: true,
-                        data: [],
-                        message: "Dữ liệu không tồn tại",
-                    });
-                }
-
-                return res.status(200).json({
-                    data: rows[0],
-                    isSuccess: true,
-                    message: "Tải dữ liệu thành công",
-                });
-            }
-        } catch (error) {
-            console.log(error);
-            return res.status(500).json({
-                isSuccess: false,
-                message: "Lỗi server",
-            });
-        }
-    }
-
-    async readClinicByType(req, res) {
-        try {
-            // get the token from the request body
-            const { search, page, limit } = req.query;
-            console.log(search, page, limit);
-
-            //get clinic with pagination
-            if (page && limit) {
-                const offset = (page - 1) * limit;
-                const [rows] = await db.query(
-                    `
-                        SELECT clinics.*, clinictypes.id as typeid, clinictypes.name as type FROM clinics 
-                        INNER JOIN clinictypes ON clinics.type = clinictypes.id 
-                        ${search !== "all" ? `WHERE clinictypes.id = '${search}'` : ""} and clinics.isPublic = 1
-                        ORDER BY createdAt DESC 
-                        LIMIT ${limit} 
-                        OFFSET ${offset}
-                    `
+    
+                // Lấy thông tin manager
+                const [manager] = await db.query(`SELECT doctor.firstname, doctor.lastname FROM doctor WHERE clinicId = ? AND position = ?`, [rows[0].id, "manager"]);
+    
+                // Đếm tổng số kết quả
+                const [count] = await db.query(
+                    `SELECT COUNT(*) as total FROM clinics ${search ? `WHERE name LIKE ? OR address LIKE ?` : ""}`,
+                    countParams
                 );
-                const [count] = await db.query(`SELECT COUNT(*) as total FROM clinics ${search !== "all" ? `WHERE id = '${search}'` : ""}`);
+    
                 const total = count[0].total;
-                const totalPages = Math.ceil(total / limit);
-
-                if (rows.length === 0) {
-                    return res.status(404).json({
-                        isSuccess: true,
-                        message: "Dữ liệu không tồn tại",
-                        data: [],
-                    });
-                }
-
+                const totalPages = Math.ceil(total / parseInt(limit));
+    
+                const data = rows.map((item) => ({
+                    ...item,
+                    firstname: manager[0]?.firstname || "",
+                    lastname: manager[0]?.lastname || "",
+                }));
+    
                 return res.status(200).json({
-                    data: rows,
-                    page: page,
+                    data: data,
+                    page: parseInt(page),
                     isSuccess: true,
                     totalPages: totalPages,
                     message: "Tải dữ liệu thành công",
                 });
             }
-            //get all clinics
-            const [rows] = await db.query(`SELECT * FROM clinics WHERE type = ${id}`);
+    
+            // Trường hợp lấy phòng khám theo ID
+            const [rows] = await db.query(
+                `SELECT clinics.*, clinictypes.name as type FROM clinics
+                 INNER JOIN clinictypes ON clinictypes.id = clinics.type
+                 WHERE clinics.id = ?`,
+                [id]
+            );
+    
             if (rows.length === 0) {
                 return res.status(404).json({
                     isSuccess: false,
                     message: "Dữ liệu không tồn tại",
                 });
             }
+    
             return res.status(200).json({
-                data: rows,
+                data: rows[0],
                 isSuccess: true,
                 message: "Tải dữ liệu thành công",
             });
+    
         } catch (error) {
             console.log(error);
             return res.status(500).json({
@@ -371,54 +323,189 @@ class ClinicController {
             });
         }
     }
+    
+
+    async readClinicByType(req, res) {
+        try {
+            const { search, page, limit } = req.query;
+    
+            // Xác thực và ép kiểu dữ liệu đầu vào
+            const pageNum = parseInt(page, 10) || 1;
+            const limitNum = parseInt(limit, 10) || 10;
+            const offset = (pageNum - 1) * limitNum;
+    
+            let whereClause = "WHERE clinics.isPublic = 1";
+            const queryParams = [];
+    
+            if (search && search !== "all") {
+                whereClause += " AND clinictypes.id = ?";
+                queryParams.push(search);
+            }
+    
+            // Truy vấn dữ liệu với phân trang
+            const query = `
+                SELECT clinics.*, clinictypes.id as typeid, clinictypes.name as type 
+                FROM clinics 
+                INNER JOIN clinictypes ON clinics.type = clinictypes.id 
+                ${whereClause}
+                ORDER BY clinics.createdAt DESC 
+                LIMIT ? OFFSET ?
+            `;
+            queryParams.push(limitNum, offset);
+    
+            const [rows] = await db.query(query, queryParams);
+    
+            // Đếm tổng số kết quả
+            const countQuery = `
+                SELECT COUNT(*) as total 
+                FROM clinics 
+                INNER JOIN clinictypes ON clinics.type = clinictypes.id 
+                ${whereClause}
+            `;
+            const [countRows] = await db.query(countQuery, queryParams.slice(0, queryParams.length - 2));
+            const total = countRows[0]?.total || 0;
+            const totalPages = Math.ceil(total / limitNum);
+    
+            if (rows.length === 0) {
+                return res.status(404).json({
+                    isSuccess: true,
+                    message: "Dữ liệu không tồn tại",
+                    data: [],
+                });
+            }
+    
+            return res.status(200).json({
+                data: rows,
+                page: pageNum,
+                isSuccess: true,
+                totalPages: totalPages,
+                message: "Tải dữ liệu thành công",
+            });
+    
+        } catch (error) {
+            console.log(error);
+            return res.status(500).json({
+                isSuccess: false,
+                message: "Lỗi server",
+            });
+        }
+    }
+    
 
     async updateClinic(req, res) {
         try {
-            const { id, name, address, phone, email, description, image, schedule, content, establish, firstname, lastname, type } = req.body;
-
-            if (!id || !name || !address || !phone || !email || !firstname || !lastname) {
+            const {
+                id,
+                name,
+                address,
+                phone,
+                email,
+                description,
+                image,
+                schedule,
+                content,
+                establish,
+                firstname,
+                lastname,
+                type
+            } = req.body;
+    
+            // Kiểm tra bắt buộc dữ liệu đầu vào
+            if (!id) {
                 return res.status(400).json({
                     isSuccess: false,
-                    message: "Vui lòng nhập đầy đủ thông phòng khám",
+                    message: "ID phòng khám là bắt buộc",
                 });
             }
-            const [rows] = await db.query(
-                `UPDATE clinics SET 
-                    ${name ? `name = '${name}',` : ""} 
-                    ${address ? `address = '${address}',` : ""} 
-                    ${phone ? `phone = '${phone}',` : ""} 
-                    ${email ? `email = '${email}',` : ""} 
-                    ${description ? `description = '${description}',` : ""} 
-                    ${image ? `image = '${image}',` : ""} 
-                    ${schedule ? `schedule = '${schedule}',` : ""} 
-                    ${content ? `content = '${content}',` : ""} 
-                    ${establish ? `establish = '${establish}',` : ""} 
-                    ${type ? `type = '${type}',` : ""}
-                    `.replace(/,\s*$/, "") + // Remove trailing comma
-                    ` WHERE id = '${id}'`
-            );
-            if (rows.affectedRows === 0) {
-                return res.status(400).json({
-                    isSuccess: false,
-                    message: "Cập nhật phòng khám thất bại",
-                });
+    
+            // Chuẩn bị các trường cần cập nhật cho clinics
+            const clinicFields = [];
+            const clinicValues = [];
+    
+            if (name) {
+                clinicFields.push("name = ?");
+                clinicValues.push(name);
             }
-
-            if (firstname && lastname) {
-                const [rows2] = await db.query(
-                    `UPDATE doctor SET 
-                        ${firstname ? `firstname = '${firstname}',` : ""} 
-                        ${lastname ? `lastname = '${lastname}',` : ""} 
-                        `.replace(/,\s*$/, "") + // Remove trailing comma
-                        ` WHERE clinicId = '${id}'`
-                );
-                if (rows2.affectedRows === 0) {
+            if (address) {
+                clinicFields.push("address = ?");
+                clinicValues.push(address);
+            }
+            if (phone) {
+                clinicFields.push("phone = ?");
+                clinicValues.push(phone);
+            }
+            if (email) {
+                clinicFields.push("email = ?");
+                clinicValues.push(email);
+            }
+            if (description) {
+                clinicFields.push("description = ?");
+                clinicValues.push(description);
+            }
+            if (image) {
+                clinicFields.push("image = ?");
+                clinicValues.push(image);
+            }
+            if (schedule) {
+                clinicFields.push("schedule = ?");
+                clinicValues.push(schedule);
+            }
+            if (content) {
+                clinicFields.push("content = ?");
+                clinicValues.push(content);
+            }
+            if (establish) {
+                clinicFields.push("establish = ?");
+                clinicValues.push(establish);
+            }
+            if (type) {
+                clinicFields.push("type = ?");
+                clinicValues.push(type);
+            }
+    
+            if (clinicFields.length > 0) {
+                clinicValues.push(id);
+                const query = `UPDATE clinics SET ${clinicFields.join(", ")} WHERE id = ?`;
+    
+                const [rows] = await db.query(query, clinicValues);
+    
+                if (rows.affectedRows === 0) {
                     return res.status(400).json({
                         isSuccess: false,
                         message: "Cập nhật phòng khám thất bại",
                     });
                 }
             }
+    
+            // Cập nhật thông tin manager trong bảng doctor nếu firstname và lastname có giá trị
+            if (firstname || lastname) {
+                const doctorFields = [];
+                const doctorValues = [];
+    
+                if (firstname) {
+                    doctorFields.push("firstname = ?");
+                    doctorValues.push(firstname);
+                }
+                if (lastname) {
+                    doctorFields.push("lastname = ?");
+                    doctorValues.push(lastname);
+                }
+    
+                if (doctorFields.length > 0) {
+                    doctorValues.push(id);
+                    const doctorQuery = `UPDATE doctor SET ${doctorFields.join(", ")} WHERE clinicId = ?`;
+    
+                    const [rows2] = await db.query(doctorQuery, doctorValues);
+    
+                    if (rows2.affectedRows === 0) {
+                        return res.status(400).json({
+                            isSuccess: false,
+                            message: "Cập nhật thông tin bác sĩ thất bại",
+                        });
+                    }
+                }
+            }
+    
             return res.status(200).json({
                 isSuccess: true,
                 message: "Cập nhật phòng khám thành công",
@@ -431,21 +518,36 @@ class ClinicController {
             });
         }
     }
+    
     async deleteClinic(req, res) {
         try {
             const { id, name } = req.query;
-            const [rows] = await db.query(`DELETE FROM clinics WHERE id = '${id}'`);
+    
+            // Kiểm tra id có được cung cấp hay không
+            if (!id) {
+                return res.status(400).json({
+                    isSuccess: false,
+                    message: "ID phòng khám là bắt buộc",
+                });
+            }
+    
+            // Xóa phòng khám với prepared statement
+            const [rows] = await db.query(`DELETE FROM clinics WHERE id = ?`, [id]);
+    
             if (rows.affectedRows === 0) {
                 return res.status(400).json({
                     isSuccess: false,
                     message: "Xóa phòng khám thất bại",
                 });
             }
+    
+            // Ghi log hành động với prepared statement
+            const actionMessage = `Delete clinic id ${id} with name ${name || 'N/A'}`;
             await db.query(
-                `INSERT INTO actionhistory (id, action, name, createdBy, query) VALUES ('${uuidv4()}', 'DELETE', 'Delete clinic id ${id} with name ${name}', '${
-                    req.user.id
-                }', 'DELETE FROM clinics WHERE id = ${id}')`
+                `INSERT INTO actionhistory (id, action, name, createdBy, query) VALUES (?, 'DELETE', ?, ?, ?)`,
+                [uuidv4(), actionMessage, req.user.id, `DELETE FROM clinics WHERE id = ${id}`]
             );
+    
             return res.status(200).json({
                 isSuccess: true,
                 message: "Xóa phòng khám thành công",
@@ -462,434 +564,39 @@ class ClinicController {
     async setPublic(req, res) {
         try {
             const { id, isPublic } = req.body;
-            console.log(id, isPublic);
-
-            const [rows] = await db.query(`UPDATE clinics SET isPublic = ${isPublic} WHERE id = '${id}'`);
+            
+            // Kiểm tra dữ liệu đầu vào
+            if (!id || typeof isPublic !== 'boolean') {
+                return res.status(400).json({
+                    isSuccess: false,
+                    message: "ID và trạng thái isPublic là bắt buộc và phải hợp lệ",
+                });
+            }
+    
+            // Cập nhật trạng thái với prepared statement
+            const [rows] = await db.query(`UPDATE clinics SET isPublic = ? WHERE id = ?`, [isPublic, id]);
+    
             if (rows.affectedRows === 0) {
                 return res.status(400).json({
                     isSuccess: false,
-                    message: "Cập nhật phòng khám thất bại",
+                    message: "Cập nhật phòng khám thất bại hoặc phòng khám không tồn tại",
                 });
             }
+    
             return res.status(200).json({
                 isSuccess: true,
                 message: "Cập nhật phòng khám thành công",
             });
         } catch (error) {
-            console.log(error);
+            console.error(error);
             return res.status(500).json({
                 isSuccess: false,
                 message: "Lỗi server",
             });
         }
     }
+    
 
-    //CRUD specialty
-    async readSpecialty(req, res) {
-        try {
-            const { clinicId, sort, search, limit, page } = req.query;
-            let offset = 0;
-
-            if (!clinicId) {
-                return;
-            }
-            if (limit && page) {
-                offset = (page - 1) * limit;
-            }
-
-            const [rows] = await db.query(`
-                SELECT clinics.isPublic, clinics.id as clinicId , specialty.* FROM specialty 
-                INNER JOIN clinics ON clinics.id = specialty.clinicId
-                WHERE specialty.clinicId = '${clinicId}'
-                ${search ? `AND specialty.name LIKE '%${search}%'` : ""}
-                ${sort ? `ORDER BY ${sort + " " + (sort !== "createdAt" ? "ASC" : "DESC")}` : ""}
-                ${limit ? `LIMIT ${limit} OFFSET ${offset}` : ""}
-            `);
-            if (rows.length === 0) {
-                return res.status(404).json({
-                    isSuccess: false,
-                    message: "Dữ liệu không tồn tại",
-                });
-            }
-            const [isPublic] = await db.query(`
-                SELECT COUNT(*) as total FROM specialty
-                INNER JOIN clinics ON clinics.id = specialty.clinicId
-                WHERE specialty.isPublic = true AND specialty.clinicId = '${clinicId}'
-                ${search ? `AND specialty.name LIKE '%${search}%'` : ""}
-            `);
-
-            const [isPrivate] = await db.query(`
-                SELECT COUNT(*) as total FROM specialty
-                INNER JOIN clinics ON clinics.id = specialty.clinicId
-                WHERE specialty.isPublic = false AND specialty.clinicId = '${clinicId}'
-                ${search ? `AND clinics.name LIKE '%${search}%'` : ""}
-            `);
-            return res.status(200).json({
-                data: rows,
-                isSuccess: true,
-                public: isPublic[0].total,
-                private: isPrivate[0].total,
-                count: isPublic[0].total + isPrivate[0].total,
-                page: page,
-                totalPages: Math.ceil((isPublic[0].total + isPrivate[0].total) / limit),
-                message: "Tải dữ liệu thành công",
-            });
-        } catch (error) {
-            console.log(error);
-            res.status(500).json({
-                isSuccess: false,
-                message: error,
-            });
-        }
-    }
-
-    async readSpecialtyPublic(req, res) {
-        try {
-            const { clinicId, sort, search, limit, page } = req.query;
-            let offset = 0;
-            if (!clinicId) {
-                return;
-            }
-            if (limit && page) {
-                offset = (page - 1) * limit;
-            }
-
-            const [rows] = await db.query(`
-                SELECT clinics.id as clinicId, clinics.name as clinicName, clinics.star, clinics.schedule, clinics.address, clinics.description , specialty.* FROM specialty 
-                INNER JOIN clinics ON clinics.id = specialty.clinicId
-                WHERE specialty.isPublic = true AND specialty.clinicId = '${clinicId}'
-                ${search ? `AND specialty.name LIKE '%${search}%'` : ""}
-                ${sort ? `ORDER BY ${sort + " " + (sort !== "createdAt" ? "ASC" : "DESC")}` : ""}
-                ${limit ? `LIMIT ${limit} OFFSET ${offset}` : ""}
-            `);
-            if (rows.length === 0) {
-                return res.status(404).json({
-                    isSuccess: true,
-                    data: [],
-                    message: "Dữ liệu không tồn tại",
-                });
-            }
-
-            return res.status(200).json({
-                data: rows,
-                isSuccess: true,
-                message: "Tải dữ liệu thành công",
-            });
-        } catch (error) {
-            console.log(error);
-            res.status(500).json({
-                isSuccess: false,
-                message: error,
-            });
-        }
-    }
-
-    async createSpecialty(req, res) {
-        try {
-            const { name, clinicId, description } = req.body;
-            console.log(req.body);
-
-            const id = uuidv4();
-            const [rows] = await db.query(`INSERT INTO specialty (id, name, clinicId, description) VALUES ('${id}', '${name}', '${clinicId}', '${description}')`);
-            if (rows.affectedRows === 0) {
-                return res.status(400).json({
-                    isSuccess: false,
-                    message: "Tạo chuyên khoa thất bại",
-                });
-            }
-            return res.status(200).json({
-                isSuccess: true,
-                message: "Tạo chuyên khoa thành công",
-            });
-        } catch (error) {
-            console.log(error);
-            res.status(500).json({
-                isSuccess: false,
-                message: error,
-            });
-        }
-    }
-
-    async updateSpecialty(req, res) {
-        try {
-            const { id, name, description } = req.body;
-            const [rows] = await db.query(
-                `UPDATE specialty SET 
-                    ${name ? `name = '${name}',` : ""} 
-                    ${description ? `description = '${description}',` : ""} 
-                    
-                    `.replace(/,\s*$/, "") + // Remove trailing comma
-                    ` WHERE id = '${id}'`
-            );
-            if (rows.affectedRows === 0) {
-                return res.status(400).json({
-                    isSuccess: false,
-                    message: "Cập nhật chuyên khoa thất bại",
-                });
-            }
-            return res.status(200).json({
-                isSuccess: true,
-                message: "Cập nhật chuyên khoa thành công",
-            });
-        } catch (error) {
-            console.log(error);
-            res.status(500).json({
-                isSuccess: false,
-                message: error,
-            });
-        }
-    }
-
-    async deleteSpecialty(req, res) {
-        try {
-            const { id, name } = req.query;
-            const [rows] = await db.query(`DELETE FROM specialty WHERE id = '${id}'`);
-            if (rows.affectedRows === 0) {
-                return res.status(400).json({
-                    isSuccess: false,
-                    message: "Xóa chuyên khoa thất bại",
-                });
-            }
-            console.log(`DELETE FROM specialty WHERE id = ${id}`);
-
-            await db.query(
-                `INSERT INTO actionhistory (id, action, name, createdBy, query) VALUES ('${uuidv4()}', 'DELETE', 'Delete specialty id ${id} with name ${name}', '${
-                    req.user.id
-                }', 'DELETE FROM specialty WHERE id = ${id}')`
-            );
-            return res.status(200).json({
-                isSuccess: true,
-                message: "Xóa chuyên khoa thành công",
-            });
-        } catch (error) {
-            console.log(error);
-            res.status(500).json({
-                isSuccess: false,
-                message: error,
-            });
-        }
-    }
-
-    async setPublicSpecialty(req, res) {
-        try {
-            const { id, isPublic } = req.body;
-            const [rows] = await db.query(`UPDATE specialty SET isPublic = ${isPublic} WHERE id = '${id}'`);
-            if (rows.affectedRows === 0) {
-                return res.status(400).json({
-                    isSuccess: false,
-                    message: "Cập nhật chuyên khoa thất bại",
-                });
-            }
-            return res.status(200).json({
-                isSuccess: true,
-                message: "Cập nhật chuyên khoa thành công",
-            });
-        } catch (error) {
-            console.log(error);
-            res.status(500).json({
-                isSuccess: false,
-                message: error,
-            });
-        }
-    }
-
-    //CRUD medical package
-
-    async readMedicalPackage(req, res) {
-        try {
-            const { clinicId, sort, search, limit, page } = req.query;
-            console.log(search);
-
-            let offset = 0;
-            if (limit && page) {
-                offset = (page - 1) * limit;
-            }
-            const [rows] = await db.query(`
-                SELECT clinics.id as clinicId, clinics.name as clinicName, clinics.star, clinics.schedule, clinics.address, clinics.description , examinationpackage.*, doctor.firstname, doctor.lastname FROM examinationpackage 
-                INNER JOIN clinics ON clinics.id = examinationpackage.clinicId
-                INNER JOIN doctor ON doctor.id = examinationpackage.doctorId
-                WHERE examinationpackage.clinicId = '${clinicId}'
-                ${search ? `AND examinationpackage.name LIKE '%${search}%'` : ""}
-                ${sort ? `ORDER BY ${sort + " " + (sort !== "createdAt" ? "ASC" : "DESC")}` : ""}
-                ${limit ? `LIMIT ${limit} OFFSET ${offset}` : ""}
-            `);
-            if (rows.length === 0) {
-                return res.status(404).json({
-                    isSuccess: false,
-                    message: "Dữ liệu không tồn tại",
-                });
-            }
-            const [isPublic] = await db.query(`
-                SELECT COUNT(*) as total FROM examinationpackage
-                INNER JOIN clinics ON clinics.id = examinationpackage.clinicId
-                WHERE examinationpackage.isPublic = true AND examinationpackage.clinicId = '${clinicId}'
-                ${search ? `AND clinics.name LIKE '%${search}%'` : ""}
-            `);
-
-            const [isPrivate] = await db.query(`
-                SELECT COUNT(*) as total FROM examinationpackage
-                INNER JOIN clinics ON clinics.id = examinationpackage.clinicId
-                WHERE examinationpackage.isPublic = false AND examinationpackage.clinicId = '${clinicId}'
-                ${search ? `AND clinics.name LIKE '%${search}%'` : ""}
-            `);
-
-            return res.status(200).json({
-                data: rows,
-                isSuccess: true,
-                public: isPublic[0].total,
-                private: isPrivate[0].total,
-                count: isPublic[0].total + isPrivate[0].total,
-                page: page,
-                totalPages: Math.ceil((isPublic[0].total + isPrivate[0].total) / limit),
-                message: "Tải dữ liệu thành công",
-            });
-        } catch (error) {
-            console.log(error);
-            return res.status(500).json({
-                isSuccess: false,
-                message: error,
-            });
-        }
-    }
-    async createMedicalPackage(req, res) {
-        try {
-            const { name, clinicId, description, price, doctorId } = req.body;
-            const id = uuidv4();
-            const [rows] = await db.query(
-                `INSERT INTO examinationpackage (id, name, clinicId, description, price, doctorId) VALUES ('${id}', '${name}', '${clinicId}', '${description}', '${price}', '${doctorId}')`
-            );
-            if (rows.affectedRows === 0) {
-                return res.status(400).json({
-                    isSuccess: false,
-                    message: "Tạo gói khám thất bại",
-                });
-            }
-            return res.status(200).json({
-                isSuccess: true,
-                message: "Tạo gói khám thành công",
-            });
-        } catch (error) {
-            console.log(error);
-            return res.status(500).json({
-                isSuccess: false,
-                message: error,
-            });
-        }
-    }
-    async updateMedicalPackage(req, res) {
-        try {
-            const { id, name, description, price, doctorId } = req.body;
-            const [rows] = await db.query(
-                `UPDATE examinationpackage SET 
-                    ${name ? `name = '${name}',` : ""} 
-                    ${description ? `description = '${description}',` : ""} 
-                    ${price ? `price = '${price}',` : ""} 
-                    ${doctorId ? `doctorId = '${doctorId}',` : ""} 
-                    `.replace(/,\s*$/, "") + // Remove trailing comma
-                    ` WHERE id = '${id}'`
-            );
-            if (rows.affectedRows === 0) {
-                return res.status(400).json({
-                    isSuccess: false,
-                    message: "Cập nhật gói khám thất bại",
-                });
-            }
-            return res.status(200).json({
-                isSuccess: true,
-                message: "Cập nhật gói khám thành công",
-            });
-        } catch (error) {
-            console.log(error);
-            return res.status(500).json({
-                isSuccess: false,
-                message: error,
-            });
-        }
-    }
-    async deleteMedicalPackage(req, res) {
-        try {
-            const { id, name } = req.query;
-            const [rows] = await db.query(`DELETE FROM examinationpackage WHERE id = '${id}'`);
-            if (rows.affectedRows === 0) {
-                return res.status(400).json({
-                    isSuccess: false,
-                    message: "Xóa gói khám thất bại",
-                });
-            }
-            await db.query(
-                `INSERT INTO actionhistory (id, action, name, createdBy, query) VALUES ('${uuidv4()}', 'DELETE', 'Delete examinationpackage id ${id} with name ${name}', '${
-                    req.user.id
-                }', 'DELETE FROM examinationpackage WHERE id = ${id}')`
-            );
-            return res.status(200).json({
-                isSuccess: true,
-                message: "Xóa gói khám thành công",
-            });
-        } catch (error) {
-            console.log(error);
-            return res.status(500).json({
-                isSuccess: false,
-                message: error,
-            });
-        }
-    }
-    async setPublicMedicalPackage(req, res) {
-        try {
-            const { id, isPublic } = req.body;
-            const [rows] = await db.query(`UPDATE examinationpackage SET isPublic = ${isPublic} WHERE id = '${id}'`);
-            if (rows.affectedRows === 0) {
-                return res.status(400).json({
-                    isSuccess: false,
-                    message: "Cập nhật gói khám thất bại",
-                });
-            }
-            return res.status(200).json({
-                isSuccess: true,
-                message: "Cập nhật gói khám thành công",
-            });
-        } catch (error) {
-            console.log(error);
-            return res.status(500).json({
-                isSuccess: false,
-                message: error,
-            });
-        }
-    }
-    async readMedicalPackagePublic(req, res) {
-        try {
-            const { clinicId, sort, search, limit, page } = req.query;
-            let offset = 0;
-            if (limit && page) {
-                offset = (page - 1) * limit;
-            }
-            const [rows] = await db.query(`
-                SELECT clinics.id as clinicId, clinics.name as clinicName, clinics.star, clinics.schedule, clinics.address, clinics.description , examinationpackage.* FROM examinationpackage 
-                INNER JOIN clinics ON clinics.id = examinationpackage.clinicId
-                WHERE examinationpackage.isPublic = true AND examinationpackage.clinicId = '${clinicId}'
-                ${search ? `AND examinationpackage.name LIKE '%${search}%'` : ""}
-                ${sort ? `ORDER BY ${sort + " " + (sort !== "createdAt" ? "ASC" : "DESC")}` : ""}
-                ${limit ? `LIMIT ${limit} OFFSET ${offset}` : ""}
-            `);
-            if (rows.length === 0) {
-                return res.status(404).json({
-                    isSuccess: true,
-                    data: [],
-                    message: "Dữ liệu không tồn tại",
-                });
-            }
-
-            return res.status(200).json({
-                data: rows,
-                isSuccess: true,
-                message: "Tải dữ liệu thành công",
-            });
-        } catch (error) {
-            console.log(error);
-            return res.status(500).json({
-                isSuccess: false,
-                message: error,
-            });
-        }
-    }
+   
 }
 export default ClinicController;

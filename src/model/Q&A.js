@@ -9,14 +9,22 @@ class QuestionAndAnswer {
 
     async getAll(search, type) {
         try {
-            const [rows] = await db.query(
-                `SELECT * FROM question_and_answer
-                WHERE 1 
-                ${search ? `AND question LIKE '%${search}%' OR answer LIKE '%${search}%'` : ""}
-                ${type ? `AND type = '${type}'` : ""}
-                `
-            );
-
+            let query = `SELECT * FROM question_and_answer WHERE 1`;
+            const params = [];
+    
+            // Add conditions dynamically
+            if (search) {
+                query += ` AND (question LIKE ? OR answer LIKE ?)`;
+                params.push(`%${search}%`, `%${search}%`);
+            }
+            
+            if (type) {
+                query += ` AND type = ?`;
+                params.push(type);
+            }
+    
+            const [rows] = await db.query(query, params);
+    
             return {
                 isSuccess: true,
                 data: rows,
@@ -29,6 +37,7 @@ class QuestionAndAnswer {
             };
         }
     }
+    
 
     async getById(id) {
         try {

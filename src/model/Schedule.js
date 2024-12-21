@@ -13,13 +13,13 @@ class Schedule {
 
     async getSchedule(clinicId, userId) {
         try {
-            const [doctor] = await db.query(`SELECT specialize FROM doctor WHERE userId = '${userId}'`);
+            const [doctor] = await db.query(`SELECT specialize FROM doctor WHERE userId = ?`, [userId]);
             const query = `SELECT  date, month, year, GROUP_CONCAT(id) AS listProfile FROM historybooking 
-                WHERE clinicId = '${clinicId}' AND doctorId = '${userId}' AND status between 2 AND 3
+                WHERE clinicId = ? AND doctorId = ? AND status between ? AND ?
                 GROUP BY date, month, year 
               `;
 
-            const [rows] = await db.query(query);
+            const [rows] = await db.query(query, [clinicId, userId, 2, 3]);
 
             const generateSchedule = generateDate(this.month || dayjs().month(), this.year || dayjs().year(), rows);
 

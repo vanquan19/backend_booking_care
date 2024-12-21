@@ -19,11 +19,28 @@ export class PatientProfile {
 
     //create profile
     async createPatientProfile() {
-        const query = `INSERT INTO patientprofile (id, fullname, phone, email, province, district, commune, birthday, sex, career, nation, identify, curentAddress, userID) VALUES
-         ('${this.id}', '${this.name}', '${this.phone}', '${this.email}', '${this.province}', '${this.district}', '${this.ward}', '${this.birthday}', '${this.sex}', '${this.job}', '${this.ethnic}', '${this.identity}', '${this.address}', '${this.userId}')`;
-
+        const query = `
+        INSERT INTO patientprofile 
+        (id, fullname, phone, email, province, district, commune, birthday, sex, career, nation, identify, curentAddress, userID) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
         try {
-            const [rows] = await db.query(query);
+            const [rows] = await db.query(query, [
+                this.id, 
+                this.name, 
+                this.phone, 
+                this.email, 
+                this.province, 
+                this.district, 
+                this.ward, 
+                this.birthday, 
+                this.sex, 
+                this.job, 
+                this.ethnic, 
+                this.identity, 
+                this.address, 
+                this.userId
+            ]);
             if (rows.affectedRows > 0) {
                 return {
                     isSuccess: true,
@@ -45,11 +62,9 @@ export class PatientProfile {
 
     //get profile
     async getPatientProfile(userId) {
-        const query = `SELECT * FROM patientprofile WHERE userID = '${userId}'`;
+        const query = `SELECT * FROM patientprofile WHERE userID = ?`;
         try {
-            const [rows] = await db.query(query);
-            console.log(rows);
-
+            const [rows] = await db.query(query, [userId]);
             if (rows.length > 0) {
                 return {
                     isSuccess: true,
@@ -72,9 +87,9 @@ export class PatientProfile {
 
     //get profile by id
     async getPatientProfileById() {
-        const query = `SELECT * FROM patientprofile WHERE id = '${this.id}'`;
+        const query = `SELECT * FROM patientprofile WHERE id = ?`;
         try {
-            const [rows] = await db.query(query);
+            const [rows] = await db.query(query, [this.id]);
             if (rows.length > 0) {
                 return {
                     isSuccess: true,
@@ -96,9 +111,27 @@ export class PatientProfile {
     }
     //update profile
     async updatePatientProfile() {
-        const query = `UPDATE patientprofile SET fullname = '${this.name}', phone = '${this.phone}', email = '${this.email}', province = '${this.province}', district = '${this.district}', commune = '${this.ward}', birthday = '${this.birthday}', sex = '${this.sex}', career = '${this.job}', nation = '${this.ethnic}', identify = '${this.identity}', curentAddress = '${this.address}' WHERE id = '${this.id}'`;
+        const query = `
+            UPDATE patientprofile 
+            SET fullname = ?, phone = ?, email = ?, province = ?, district = ?, commune = ?, birthday = ?, sex = ?, career = ?, nation = ?, identify = ?, curentAddress = ? 
+            WHERE id = ?
+        `;        
         try {
-            const [rows] = await db.query(query);
+            const [rows] = await db.query(query, [
+                this.name, 
+                this.phone, 
+                this.email, 
+                this.province, 
+                this.district, 
+                this.ward, 
+                this.birthday, 
+                this.sex, 
+                this.job, 
+                this.ethnic, 
+                this.identity, 
+                this.address, 
+                this.id
+            ]);
             if (rows.affectedRows > 0) {
                 return {
                     isSuccess: true,
@@ -120,9 +153,9 @@ export class PatientProfile {
 
     //delete profile
     async deletePatientProfile() {
-        const query = `DELETE FROM patientprofile WHERE id = '${this.id}'`;
+        const query = `DELETE FROM patientprofile WHERE id = ?`;
         try {
-            db.query(query);
+            db.query(query, [this.id]);
             return {
                 isSuccess: true,
                 message: "Xóa hồ sơ thành công",

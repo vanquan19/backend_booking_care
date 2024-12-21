@@ -55,7 +55,6 @@ class Notification {
     async get(reciverId, limit = 0) {
         try {
             const [result] = await db.query(`SELECT * FROM notifycation WHERE reciverId = ? ORDER BY createdAt DESC LIMIT ?`, [reciverId, +limit]);
-            console.log(result);
 
             return {
                 isSuccess: true,
