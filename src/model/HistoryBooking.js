@@ -20,17 +20,17 @@ export default class HistoryBooking {
         const params = [
             this.id,
             this.clinicId,
-            this.specialtyId || "",  // Default to empty string if specialtyId is not provided
+            this.specialtyId || "", // Default to empty string if specialtyId is not provided
             this.profileId,
             this.patientId,
-            this.doctorId || "",      // Default to empty string if doctorId is not provided
-            this.packageId || "",     // Default to empty string if packageId is not provided
+            this.doctorId || "", // Default to empty string if doctorId is not provided
+            this.packageId || "", // Default to empty string if packageId is not provided
             this.time,
             this.date,
             this.month,
-            this.year
+            this.year,
         ];
-    
+
         try {
             const query = `INSERT INTO historybooking (id, clinicId, specialtyId, profileId, patientId, doctorId, packageId, time, date, month, year) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
@@ -53,10 +53,8 @@ export default class HistoryBooking {
             };
         }
     }
-    
 
     async getHistoryBooking() {
-        
         try {
             const query = `
                 SELECT historybooking.*, 
@@ -78,7 +76,7 @@ export default class HistoryBooking {
             `;
             const params = [this.patientId, this.status];
             const [rows] = await db.query(query, params);
-    
+
             const datas = rows.map((data) => {
                 if (data.specialtyId) {
                     return {
@@ -86,14 +84,14 @@ export default class HistoryBooking {
                         type: "Đặt khám theo chuyên khoa",
                         specialty: {
                             id: data.specialtyId,
-                            name: data.specialtyName
+                            name: data.specialtyName,
                         },
                         doctor: {
                             id: data.doctorId,
                             firstname: data.doctorFirstname,
                             lastname: data.doctorLastname,
-                            price: data.doctorPrice
-                        }
+                            price: data.doctorPrice,
+                        },
                     };
                 } else if (data.packageId) {
                     return {
@@ -102,27 +100,26 @@ export default class HistoryBooking {
                         package: {
                             id: data.packageId,
                             name: data.packageName,
-                            price: data.packagePrice
+                            price: data.packagePrice,
                         },
                         doctor: {
                             id: data.doctorId,
                             firstname: data.doctorFirstname,
-                            lastname: data.doctorLastname
-                        }
+                            lastname: data.doctorLastname,
+                        },
                     };
                 } else {
                     return {
-                        ...data
+                        ...data,
                     };
                 }
             });
-    
+
             return {
                 isSuccess: true,
                 message: "Lấy lịch sử đặt khám thành công",
-                data: datas
+                data: datas,
             };
-    
         } catch (error) {
             console.log(error);
             return {
@@ -131,7 +128,6 @@ export default class HistoryBooking {
             };
         }
     }
-    
 
     async getHistoryBookingByStatus() {
         try {
@@ -146,7 +142,7 @@ export default class HistoryBooking {
                 ORDER BY historybooking.createdAt DESC
                 `;
             const params = [this.clinicId, this.status];
-            const [rows] = await db.query(query , params);
+            const [rows] = await db.query(query, params);
             const datas = rows.map(async (data) => {
                 if (data.specialtyId) {
                     const [specialty] = await db.query(`SELECT id, name FROM specialty WHERE id = '${data.specialtyId}'`);
@@ -186,7 +182,7 @@ export default class HistoryBooking {
     async getHistoryBookingByDate(listProfile) {
         try {
             // Construct query to fetch all history bookings in one go with JOINs
-            
+
             const query = `
                 SELECT historybooking.*, 
                        patientprofile.fullname, patientprofile.email, patientprofile.phone,
@@ -202,10 +198,10 @@ export default class HistoryBooking {
                 WHERE historybooking.id IN (?) AND historybooking.status BETWEEN 2 AND 5
                 ORDER BY STR_TO_DATE(SUBSTRING_INDEX(historybooking.time, ' - ', 1), '%H:%i') ASC
             `;
-            
+
             // Execute query with parameterized listProfile
             const [rows] = await db.query(query, [listProfile]);
-    
+
             // Process results
             const results = rows.map((row) => {
                 if (row.specialtyId) {
@@ -214,14 +210,14 @@ export default class HistoryBooking {
                         type: "Đặt khám theo chuyên khoa",
                         specialty: {
                             id: row.specialtyId,
-                            name: row.specialtyName
+                            name: row.specialtyName,
                         },
                         doctor: {
                             id: row.doctorId,
                             firstname: row.doctorFirstname,
                             lastname: row.doctorLastname,
-                            price: row.doctorPrice
-                        }
+                            price: row.doctorPrice,
+                        },
                     };
                 } else if (row.packageId) {
                     return {
@@ -229,24 +225,23 @@ export default class HistoryBooking {
                         type: "Đặt khám theo gói khám",
                         package: {
                             id: row.packageId,
-                            name: row.packageName
+                            name: row.packageName,
                         },
                         doctor: {
                             id: row.doctorId,
                             firstname: row.doctorFirstname,
-                            lastname: row.doctorLastname
-                        }
+                            lastname: row.doctorLastname,
+                        },
                     };
                 } else {
                     return { ...row };
                 }
             });
-    
+
             return {
                 isSuccess: true,
                 data: results,
             };
-    
         } catch (error) {
             console.log(error);
             return {
@@ -255,7 +250,6 @@ export default class HistoryBooking {
             };
         }
     }
-    
 
     async getAmountBookingByStatus() {
         const query = `
@@ -265,15 +259,15 @@ export default class HistoryBooking {
             ${this.doctorId ? `AND doctorId = ?` : ""}
             GROUP BY status
         `;
-    
+
         const params = [this.clinicId];
         if (this.doctorId) {
             params.push(this.doctorId);
         }
-    
+
         try {
             const [rows] = await db.query(query, params);
-    
+
             // Default status names mapping
             const statusNames = {
                 1: "Chờ xác nhận",
@@ -282,17 +276,17 @@ export default class HistoryBooking {
                 4: "Đã khám",
                 5: "Đã từ chối",
             };
-    
+
             // Map query results to the status names
             const data = Object.keys(statusNames).map((status) => {
-                const row = rows.find(r => r.status == status);
+                const row = rows.find((r) => r.status == status);
                 return {
                     status: status,
                     name: statusNames[status],
-                    amount: row ? row.amount : 0,  // Default to 0 if no record for that status
+                    amount: row ? row.amount : 0, // Default to 0 if no record for that status
                 };
             });
-    
+
             return {
                 isSuccess: true,
                 data,
@@ -305,7 +299,6 @@ export default class HistoryBooking {
             };
         }
     }
-    
 
     async getAmountHistoryBooking() {
         const query1 = `SELECT COUNT(*) as amount FROM historybooking WHERE patientId = ? AND status = ?`;
@@ -353,7 +346,6 @@ export default class HistoryBooking {
         }
     }
     async getHistoryBookingSearch(search) {
-        
         try {
             const query = `
                 SELECT historybooking.*, 
@@ -376,7 +368,7 @@ export default class HistoryBooking {
                 LIMIT 5
             `;
             const [rows] = await db.query(query, [this.clinicId, `%${search}%`]);
-    
+
             // Map data with the additional fields from the joined tables
             const data = rows.map((data) => {
                 if (data.specialty_name) {
@@ -403,7 +395,7 @@ export default class HistoryBooking {
                     };
                 }
             });
-    
+
             return {
                 isSuccess: true,
                 message: "Lấy lịch sử đặt khám thành công",
@@ -417,20 +409,19 @@ export default class HistoryBooking {
             };
         }
     }
-    
 
     async getHistoryBookingById() {
         const query = `SELECT * FROM historybooking WHERE id = ?`;
         try {
             const [rows] = await db.query(query, [this.id]);
-            
+
             if (rows.length === 0) {
                 return {
                     isSuccess: false,
                     message: "Không tìm thấy lịch sử đặt khám.",
                 };
             }
-    
+
             return {
                 isSuccess: true,
                 data: rows[0], // Return the first result as it's expected to be unique for an ID
@@ -443,7 +434,6 @@ export default class HistoryBooking {
             };
         }
     }
-    
 
     async updateStatusHistoryBooking() {
         const query = `UPDATE historybooking SET status = ? WHERE id = ?`;
@@ -538,6 +528,28 @@ export default class HistoryBooking {
             return {
                 isSuccess: false,
                 message: error.message,
+            };
+        }
+    }
+
+    async getGroupByHour(amount) {
+        try {
+            const query = `
+                SELECT time, date, month, year, COUNT(*) as amount
+                FROM historybooking
+                WHERE clinicId = ? AND doctorId = ? AND status IN (1,2,3)
+                GROUP BY time, date, month, year
+                HAVING amount >= ?
+            `;
+            const [rows] = await db.query(query, [this.clinicId, this.doctorId, amount || 6]);
+            return {
+                isSuccess: true,
+                data: rows,
+            };
+        } catch (error) {
+            return {
+                isSuccess: false,
+                message: "Gộp lịch sử đặt khám theo giờ thất bại",
             };
         }
     }

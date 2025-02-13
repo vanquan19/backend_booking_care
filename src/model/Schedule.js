@@ -1,6 +1,7 @@
-import generateDate from "../utils/calendar.js";
+import generateDate, { generateDateWithOffset } from "../utils/calendar.js";
 import db from "../config/db.js";
 import dayjs from "dayjs";
+import HistoryBooking from "./HistoryBooking.js";
 
 class Schedule {
     constructor(id, date, month, year, time) {
@@ -29,6 +30,31 @@ class Schedule {
                 currentDate: currentDate,
                 isSuccess: true,
                 data: generateSchedule,
+            };
+        } catch (error) {
+            console.log(error);
+            return {
+                isSuccess: false,
+                message: "Error when getting schedule",
+            };
+        }
+    }
+
+    async getScheduleWithOffTime(clinicId, doctorId, amount = 6) {
+        try {
+            const historyBooking = new HistoryBooking();
+            historyBooking.setClinicId(clinicId);
+            historyBooking.setDoctorId(doctorId);
+            const listTimeOff = await historyBooking.getGroupByHour(amount);
+            console.log("Check list time:", listTimeOff);
+            if (!listTimeOff.isSuccess) {
+                throw new Error(listTimeOff.message);
+            }
+            const generateDateOffTime = generateDateWithOffset(this.month || dayjs().month(), this.year || dayjs().year(), listTimeOff.data);
+            return {
+                isSuccess: true,
+                data: generateDateOffTime,
+                message: "Lấy lịch thành công",
             };
         } catch (error) {
             console.log(error);
